@@ -1,0 +1,98 @@
+#!/bin/bash
+
+
+
+# echo Run at `date` >> ~/Desktop/monitor.log
+
+
+# The http ports to test at bibledit.org forwarded from Ubuntu 20.04.
+PORTS2=(
+8090
+2000
+2010
+)
+
+# The https ports to test at bibledit.org forwarded from Ubuntu 20.04.
+SECPORTS2=(
+8091
+2001
+2011
+)
+
+function test_bibledit_port_http()
+{
+  wget --tries=1 -O /dev/null -o /dev/null --timeout=5 --inet4-only http://bibledit.org:$1
+}
+
+function test_bibledit_port_http_robust()
+{
+  for i in 1 2 3 4 5 6 7 8 9 10
+  do
+    test_bibledit_port_http $1
+    EXIT_CODE=$?
+    if [ $EXIT_CODE = 0 ]; then
+      return
+    fi
+  done
+}
+
+function test_bibledit_port_https()
+{
+  wget --no-check-certificate --tries=1 -O /dev/null -o /dev/null --timeout=5 --inet4-only https://bibledit.org:$1
+}
+
+function test_bibledit_port_https_robust()
+{
+  for i in 1 2 3 4 5 6 7 8 9 10
+  do
+    test_bibledit_port_https $1
+    EXIT_CODE=$?
+    if [ $EXIT_CODE = 0 ]; then
+      return
+    fi
+  done
+}
+
+# Test the http ports on Ubuntu 20.04 on the Mac mini.
+for port in ${PORTS2[@]}; do
+  test_bibledit_port_http_robust $port
+  if [ $EXIT_CODE != 0 ]; then
+    echo bibledit.org at port $port was down at `date`
+  fi
+done
+
+# Test the https ports on Ubuntu 20.04 on the Mac mini.
+for port in ${SECPORTS2[@]}; do
+  test_bibledit_port_https_robust $port
+  if [ $EXIT_CODE != 0 ]; then
+    echo bibledit.org at port $port was down at `date`
+  fi
+done
+
+
+# Test mail system at VPS
+mailq
+EXIT_CODE=$?
+if [ $EXIT_CODE != 0 ]; then
+  echo mail queue at bibleconsultants
+fi
+
+
+# Monitor disk usage on bibleconsultants.nl
+PERCENTS=`df --output=pcent /dev/sda1 | tail -1`
+PERCENTS=`echo $PERCENTS | rev | cut -c 2- | rev`
+if [ $PERCENTS -gt 92 ]; then
+  echo high disk usage at $PERCENTS%
+  df
+fi
+
+
+# Monitor the Apache webserver.
+wget --tries=1 -O /dev/null -o /dev/null --timeout=5 --inet4-only https://bibleconsultants.nl
+EXIT_CODE=$?
+if [ $EXIT_CODE != 0 ]; then
+  echo website bibleconsultants.nl was down
+  systemctl restart apache2
+  systemctl status apache2
+fi
+

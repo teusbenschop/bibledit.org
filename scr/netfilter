@@ -1,0 +1,84 @@
+#!/bin/bash
+
+
+# https://github.com/bibledit/cloud/issues/361
+
+/usr/sbin/iptables --flush
+/usr/sbin/iptables --delete-chain
+/usr/sbin/ip6tables --flush 
+/usr/sbin/ip6tables --delete-chain
+
+
+# Always allow port 22 for SSH without limits.
+# The purpose for this port is always allowed despite additional limitation later in the rules.
+/usr/sbin/iptables --append INPUT --protocol tcp --dport 22 --jump ACCEPT
+/usr/sbin/ip6tables --append INPUT --protocol tcp --dport 22 --jump ACCEPT
+
+
+# Define the new chain and fill it with defaults.
+/usr/sbin/iptables --new allowme
+/usr/sbin/ip6tables --new allowme
+/usr/sbin/iptables --append INPUT --jump allowme
+/usr/sbin/ip6tables --append INPUT --jump allowme
+
+
+# Block some ports.
+/usr/sbin/iptables --append INPUT --protocol tcp --dport 2222 --jump DROP
+/usr/sbin/ip6tables --append INPUT --protocol tcp --dport 2222 --jump DROP
+/usr/sbin/iptables --append INPUT --protocol tcp --dport 4444 --jump DROP
+/usr/sbin/ip6tables --append INPUT --protocol tcp --dport 4444 --jump DROP
+
+
+# Syn flood protection per IP address
+# https://serverfault.com/questions/340256/should-i-rate-limit-packets-with-iptables
+/usr/sbin/iptables --append INPUT --protocol tcp --syn --match hashlimit --hashlimit-above 200/sec --hashlimit-burst 10 --hashlimit-mode srcip --hashlimit-name synattack --jump DROP
+/usr/sbin/ip6tables --append INPUT --protocol tcp --syn --match hashlimit --hashlimit-above 200/sec --hashlimit-burst 10 --hashlimit-mode srcip --hashlimit-name synattack --jump DROP
+# Log dropped packets.
+#/usr/sbin/iptables --append INPUT --protocol tcp --syn --match hashlimit --hashlimit-above 200/sec --hashlimit-burst 10 --hashlimit-mode srcip --hashlimit-name synattack --jump LOG --log-prefix "SYN limit per IPv4 address: "
+#/usr/sbin/ip6tables --append INPUT --protocol tcp --syn --match hashlimit --hashlimit-above 200/sec --hashlimit-burst 10 --hashlimit-mode srcip --hashlimit-name synattack --jump LOG --log-prefix "SYN limit per IPv6 address: "
+
+
+
+
+# If a user cannot reach Bibledit Cloud at port 2017,
+# it was noticed that stopping Apache fixed the problem for then. 
+# So it would be good to rate limit port 80 and https at an early state in the iptables rules.
+# Limit traffic to the web server.
+# The result of this was that the web server became unavailable most of the time.
+# So that was not the right solution.
+#/usr/sbin/iptables -A INPUT --protocol tcp --syn --dport 80 --match limit --limit 20/s --limit-burst 30 --jump DROP
+#/usr/sbin/iptables -A INPUT --protocol tcp --syn --dport 443 --match limit --limit 20/s --limit-burst 30 --jump DROP
+#/usr/sbin/ip6tables -A INPUT --protocol tcp --syn --dport 80 --match limit --limit 20/s --limit-burst 30 --jump DROP
+#/usr/sbin/ip6tables -A INPUT --protocol tcp --syn --dport 443 --match limit --limit 20/s --limit-burst 30 --jump DROP
+
+
+# Accept all traffic to the web server.
+# Goal: Traffic to the web server is accepted right here in the rules.
+# So it won't influence the rate limiters below.
+# There was a case that lots of traffic to the web server made Bibledit Cloud unavailable,
+# because the web server traffic affected the rate limiting counters below.
+# The solution is to accept that traffic before it even could affect the rate limiters.
+#/usr/sbin/iptables -A INPUT --protocol tcp --dport 80 --jump ACCEPT
+#/usr/sbin/iptables -A INPUT --protocol tcp --dport 443 --jump ACCEPT
+#/usr/sbin/ip6tables -A INPUT --protocol tcp --dport 80 --jump ACCEPT
+#/usr/sbin/ip6tables -A INPUT --protocol tcp --dport 443 --jump ACCEPT
+
+
+# Ouput number of new connections to kern.log
+# /usr/sbin/iptables --append INPUT --protocol tcp --match conntrack --ctstate NEW --jump LOG --log-prefix "NEW TCP IPv4 CONN: "
+# /usr/sbin/ip6tables --append INPUT --protocol tcp --match conntrack --ctstate NEW --jump LOG --log-prefix "NEW TCP IPv6 CONN: "
+# cat /var/log/kern.log 
+
+
+# Rate limiting new connections to so many per second
+#/usr/sbin/iptables --append INPUT --protocol tcp --match state --state NEW --match recent --set
+#/usr/sbin/ip6tables --append INPUT --protocol tcp --match state --state NEW --match recent --set
+#/usr/sbin/iptables --append INPUT --protocol tcp --match state --state NEW --match recent --update --seconds 1 --hitcount 200 --jump DROP
+#/usr/sbin/ip6tables --append INPUT --protocol tcp --match state --state NEW --match recent --update --seconds 1 --hitcount 200 --jump DROP
+
+
+echo Listing the IPv4 rules
+/usr/sbin/iptables --list
+echo Listing the IPv6 rules
+/usr/sbin/ip6tables --list
+

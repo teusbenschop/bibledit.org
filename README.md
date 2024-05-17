@@ -1,2 +1,2 @@
 # bibledit.org
-Scripts for bibledit.org
+Backup of selection of bibledit.org 

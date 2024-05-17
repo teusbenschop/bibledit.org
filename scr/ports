@@ -1,0 +1,6 @@
+#!/bin/bash
+
+
+lsof -t -i:2222 > /home/teus/port2222.txt
+lsof -t -i:4444 > /home/teus/port4444.txt
+chown teus:teus /home/teus/port*.txt
